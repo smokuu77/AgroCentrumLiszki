@@ -94,6 +94,27 @@
         '<rect width="100%" height="100%" rx="8" ry="8" pathLength="1"/></svg>');
     });
 
+    var scrollBar = tabsRoot.querySelector('[data-tabs-scroll]');
+    var scrollThumb = scrollBar && scrollBar.firstElementChild;
+
+    function updateScrollBar() {
+      if (!scrollBar) return;
+      var max = tablist.scrollWidth - tablist.clientWidth;
+      scrollBar.hidden = max <= 1;
+      if (max <= 1) return;
+      var track = scrollBar.clientWidth;
+      var thumb = track * tablist.clientWidth / tablist.scrollWidth;
+      scrollThumb.style.width = thumb + 'px';
+      scrollThumb.style.transform = 'translateX(' + (tablist.scrollLeft / max) * (track - thumb) + 'px)';
+    }
+
+    if (scrollBar) {
+      updateScrollBar();
+      tablist.addEventListener('scroll', updateScrollBar, { passive: true });
+      window.addEventListener('resize', updateScrollBar);
+      if (document.fonts) document.fonts.ready.then(updateScrollBar);
+    }
+
     function measureOutlines() {
       tabs.forEach(function (tab) {
         var w = tab.offsetWidth + 2;
@@ -990,6 +1011,7 @@
       pdIndex = (index + pdList.length) % pdList.length;
       pdChip = pdList[pdIndex];
       pdPanel.scrollTop = 0;
+      pdBody.scrollTop = 0;
       renderProduct();
     }
 
@@ -1051,6 +1073,7 @@
       document.documentElement.style.overflow = 'hidden';
       productDialog.showModal();
       pdPanel.scrollTop = 0;
+      pdBody.scrollTop = 0;
       void productDialog.offsetWidth;
       productDialog.classList.add('is-open');
     }
