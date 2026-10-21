@@ -829,6 +829,256 @@
     });
   }
 
+  var productsData = document.querySelector('[data-products]');
+  var productDialog = document.querySelector('[data-product-dialog]');
+  var peek = document.querySelector('[data-product-peek]');
+
+  if (productsData && productDialog && typeof productDialog.showModal === 'function') {
+    var products = JSON.parse(productsData.textContent);
+    var ALLEGRO = 'https://allegro.pl/uzytkownik/Agro-Centrum2015';
+    var hoverQuery = window.matchMedia('(hover: hover) and (pointer: fine)');
+    var productChips = Array.prototype.slice.call(document.querySelectorAll('[data-product]'));
+    var pdPanel = productDialog.querySelector('.product__panel');
+    var pdMedia = productDialog.querySelector('.product__media');
+    var pdImg = productDialog.querySelector('[data-product-img]');
+    var pdBrand = productDialog.querySelector('[data-product-brand]');
+    var pdName = productDialog.querySelector('[data-product-name]');
+    var pdDesc = productDialog.querySelector('[data-product-desc]');
+    var pdVariants = productDialog.querySelector('[data-product-variants]');
+    var pdSizesRow = productDialog.querySelector('[data-product-sizes-row]');
+    var pdSizes = productDialog.querySelector('[data-product-sizes]');
+    var pdAllegro = productDialog.querySelector('[data-product-allegro]');
+    var pdNav = productDialog.querySelector('.product__nav');
+    var pdCount = productDialog.querySelector('[data-product-count]');
+    var pdList = [];
+    var pdIndex = 0;
+    var pdChip = null;
+    var pdClosing = false;
+    var pdCloseTimer = null;
+
+    function imgSrc(name, mini) {
+      return 'img/produkty/' + (mini ? 'mini/' : '') + name + '.webp';
+    }
+
+    // Najpierw miniatura z chipa (jest już w cache), potem pełne zdjęcie
+    function setImage(img, item) {
+      img.width = item.w;
+      img.height = item.h;
+      img.dataset.want = item.img;
+      img.src = imgSrc(item.img, true);
+      var full = new Image();
+      full.onload = function () {
+        if (img.dataset.want === item.img) img.src = full.src;
+      };
+      full.src = imgSrc(item.img);
+    }
+
+    function sizesOf(p, item) {
+      return item.sizes || p.sizes || '';
+    }
+
+    function renderVariant(i) {
+      var p = products[pdChip.dataset.product];
+      var item = p.items[i];
+      setImage(pdImg, item);
+      pdImg.alt = p.name + (item.label ? ', ' + item.label : '');
+      pdImg.classList.remove('is-in');
+      void pdImg.offsetWidth;
+      pdImg.classList.add('is-in');
+
+      var sizes = sizesOf(p, item);
+      pdSizes.textContent = sizes;
+      pdSizesRow.hidden = !sizes;
+
+      pdVariants.querySelectorAll('button').forEach(function (b, j) {
+        b.setAttribute('aria-pressed', String(j === i));
+      });
+    }
+
+    function renderProduct() {
+      var p = products[pdChip.dataset.product];
+
+      pdBrand.textContent = p.brand || '';
+      pdBrand.hidden = !p.brand;
+      pdName.textContent = p.name;
+      pdDesc.textContent = p.desc;
+      pdAllegro.href = ALLEGRO + '?string=' + encodeURIComponent(p.q);
+
+      pdVariants.innerHTML = '';
+      if (p.items.length > 1) {
+        p.items.forEach(function (item, i) {
+          var li = document.createElement('li');
+          var btn = document.createElement('button');
+          var thumb = document.createElement('img');
+          btn.type = 'button';
+          btn.className = 'product__variant';
+          thumb.src = imgSrc(item.img, true);
+          thumb.alt = '';
+          btn.appendChild(thumb);
+          btn.appendChild(document.createTextNode(item.label));
+          btn.addEventListener('click', function () { renderVariant(i); });
+          li.appendChild(btn);
+          pdVariants.appendChild(li);
+        });
+      }
+      pdVariants.hidden = p.items.length < 2;
+      renderVariant(0);
+
+      pdCount.textContent = (pdIndex + 1) + ' / ' + pdList.length;
+      pdNav.hidden = pdList.length < 2;
+
+      [pdIndex + 1, pdIndex - 1].forEach(function (i) {
+        var chip = pdList[(i + pdList.length) % pdList.length];
+        new Image().src = imgSrc(products[chip.dataset.product].items[0].img);
+      });
+    }
+
+    function stepProduct(d) {
+      if (pdList.length < 2) return;
+      pdIndex = (pdIndex + d + pdList.length) % pdList.length;
+      pdChip = pdList[pdIndex];
+      pdPanel.scrollTop = 0;
+      renderProduct();
+    }
+
+    function openProduct(chip) {
+      var panel = chip.closest('.tabpanel') || document;
+      pdList = Array.prototype.slice.call(panel.querySelectorAll('[data-product]'));
+      pdIndex = Math.max(pdList.indexOf(chip), 0);
+      pdChip = chip;
+      hidePeek(true);
+      clearTimeout(pdCloseTimer);
+      pdClosing = false;
+      renderProduct();
+
+      document.documentElement.style.scrollbarGutter = 'stable';
+      document.documentElement.style.overflow = 'hidden';
+      productDialog.showModal();
+      pdPanel.scrollTop = 0;
+      void productDialog.offsetWidth;
+      productDialog.classList.add('is-open');
+    }
+
+    function closeProduct() {
+      if (!productDialog.open || pdClosing) return;
+      pdClosing = true;
+      productDialog.classList.remove('is-open');
+      pdCloseTimer = setTimeout(function () {
+        productDialog.close();
+      }, reduceMotion ? 0 : 300);
+    }
+
+    productDialog.addEventListener('close', function () {
+      pdClosing = false;
+      productDialog.classList.remove('is-open');
+      unlockScroll();
+      if (pdList.indexOf(pdChip) !== -1 && !pdChip.closest('[hidden]')) pdChip.focus({ preventScroll: true });
+    });
+
+    productDialog.addEventListener('cancel', function (e) {
+      e.preventDefault();
+      closeProduct();
+    });
+
+    productDialog.addEventListener('click', function (e) {
+      if (e.target === productDialog) closeProduct();
+    });
+
+    productDialog.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowLeft') stepProduct(-1);
+      else if (e.key === 'ArrowRight') stepProduct(1);
+    });
+
+    productDialog.querySelector('[data-product-close]').addEventListener('click', closeProduct);
+    productDialog.querySelector('[data-product-prev]').addEventListener('click', function () { stepProduct(-1); });
+    productDialog.querySelector('[data-product-next]').addEventListener('click', function () { stepProduct(1); });
+
+    // Telefon: przesunięcie zdjęcia w bok zmienia produkt, przeciągnięcie w dół zamyka panel
+    var pdTouch = null;
+    productDialog.addEventListener('touchstart', function (e) {
+      pdTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY, onMedia: pdMedia.contains(e.target), top: pdPanel.scrollTop <= 0 };
+    }, { passive: true });
+    productDialog.addEventListener('touchend', function (e) {
+      if (!pdTouch) return;
+      var dx = e.changedTouches[0].clientX - pdTouch.x;
+      var dy = e.changedTouches[0].clientY - pdTouch.y;
+      if (pdTouch.onMedia && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) stepProduct(dx < 0 ? 1 : -1);
+      else if (pdTouch.top && dy > 90 && dy > Math.abs(dx)) closeProduct();
+      pdTouch = null;
+    });
+
+    var peekTimer = null;
+    var siteHeader = document.querySelector('[data-header]');
+
+    function showPeek(chip) {
+      var p = products[chip.dataset.product];
+      var item = p.items[0];
+      var count = p.items.length;
+
+      peek.querySelector('[data-peek-brand]').textContent = p.brand || '';
+      peek.querySelector('[data-peek-name]').textContent = p.name;
+      peek.querySelector('[data-peek-sizes]').textContent =
+        count > 1 ? count + (count < 5 ? ' warianty' : ' wariantów') : sizesOf(p, item);
+      setImage(peek.querySelector('[data-peek-img]'), item);
+
+      var r = chip.getBoundingClientRect();
+      var w = peek.offsetWidth;
+      var h = peek.offsetHeight;
+      var gap = 12;
+      var minTop = (siteHeader ? siteHeader.getBoundingClientRect().bottom : 0) + 8;
+      var maxTop = window.innerHeight - h - 8;
+      var left = Math.min(Math.max(r.left + r.width / 2 - w / 2, 8), window.innerWidth - w - 8);
+      var spaceAbove = r.top - gap - minTop;
+      var spaceBelow = window.innerHeight - 8 - r.bottom - gap;
+      var side = h <= spaceAbove || spaceAbove >= spaceBelow ? 'top' : 'bottom';
+      var top = side === 'top' ? r.top - h - gap : r.bottom + gap;
+      // Gdy dymek nie mieści się w całości, dociskamy go do krawędzi ekranu
+      if (top < minTop || top > maxTop) {
+        top = Math.min(Math.max(top, minTop), maxTop);
+        side = 'none';
+      }
+
+      var wasVisible = peek.classList.contains('is-visible');
+      peek.dataset.side = side;
+      peek.style.left = left + 'px';
+      peek.style.top = top + 'px';
+      peek.style.setProperty('--arrow-x', Math.min(Math.max(r.left + r.width / 2 - left, 18), w - 18) + 'px');
+      // Przy pierwszym pokazaniu pozycja ustawia się od razu, animuje się tylko wejście
+      if (!wasVisible) void peek.offsetWidth;
+      peek.classList.add('is-visible');
+    }
+
+    function hidePeek(now) {
+      if (!peek) return;
+      clearTimeout(peekTimer);
+      if (now) {
+        peek.classList.remove('is-visible');
+        return;
+      }
+      peekTimer = setTimeout(function () {
+        peek.classList.remove('is-visible');
+      }, 100);
+    }
+
+    if (peek) {
+      productChips.forEach(function (chip) {
+        chip.addEventListener('pointerenter', function (e) {
+          if (e.pointerType !== 'mouse' || !hoverQuery.matches) return;
+          clearTimeout(peekTimer);
+          var delay = peek.classList.contains('is-visible') ? 0 : 140;
+          peekTimer = setTimeout(function () { showPeek(chip); }, delay);
+        });
+        chip.addEventListener('pointerleave', function () { hidePeek(false); });
+      });
+
+      window.addEventListener('scroll', function () { hidePeek(true); }, { passive: true });
+    }
+
+    productChips.forEach(function (chip) {
+      chip.addEventListener('click', function () { openProduct(chip); });
+    });
+  }
+
   document.querySelectorAll('[data-year]').forEach(function (el) {
     el.textContent = new Date().getFullYear();
   });
