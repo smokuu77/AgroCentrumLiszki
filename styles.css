@@ -3116,6 +3116,27 @@ p {
   color: var(--text-muted);
 }
 
+.contact-tile__note--price {
+  margin-top: 0.35rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.shop-card__note {
+  grid-column: 1 / -1;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--c-sage-300);
+}
+
+.tabs__more-note {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
 @media (min-width: 56rem) {
   .contact__grid {
     grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);

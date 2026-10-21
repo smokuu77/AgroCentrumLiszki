@@ -466,8 +466,57 @@
       if (from) fly(from, imageFrame());
     };
 
+    // Przejście do sąsiedniego zdjęcia: stare odjeżdża w bok, nowe wjeżdża z drugiej strony
+    var slideOut = null;
+    var slideTarget = 0;
+    var SLIDE_PX = 48;
+
+    function finishSlide() {
+      if (!slideOut) return;
+      slideOut.onfinish = null;
+      slideOut.cancel();
+      slideOut = null;
+      lbCaption.parentNode.getAnimations().forEach(function (a) { a.cancel(); });
+      show(slideTarget);
+    }
+
+    function go(delta) {
+      if (lbClosing || links.length < 2) return;
+      finishSlide();
+      var target = current + delta;
+      if (reduceMotion || !lightbox.open) {
+        show(target);
+        return;
+      }
+
+      var dir = delta > 0 ? 1 : -1;
+      var caption = lbCaption.parentNode;
+      lbImg.getAnimations().forEach(function (a) { a.cancel(); });
+      slideTarget = target;
+      slideOut = lbImg.animate([
+        { transform: 'translateX(0)', opacity: 1 },
+        { transform: 'translateX(' + (-dir * SLIDE_PX) + 'px)', opacity: 0 }
+      ], { duration: 170, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' });
+      caption.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 170, fill: 'forwards' });
+
+      slideOut.onfinish = function () {
+        var done = slideOut;
+        slideOut = null;
+        show(target);
+        done.cancel();
+        lbImg.animate([
+          { transform: 'translateX(' + (dir * SLIDE_PX) + 'px)', opacity: 0 },
+          { transform: 'translateX(0)', opacity: 1 }
+        ], { duration: 340, easing: FLY_EASE });
+        caption.getAnimations().forEach(function (a) { a.cancel(); });
+        caption.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 340, easing: FLY_EASE });
+      };
+    }
+
     function closeLightbox() {
       if (!lightbox.open || lbClosing) return;
+      finishSlide();
+      lbImg.getAnimations().forEach(function (a) { a.cancel(); });
       lbClosing = true;
       lightbox.classList.remove('is-open');
 
@@ -491,8 +540,8 @@
       });
     }
 
-    lightbox.querySelector('[data-lightbox-prev]').addEventListener('click', function () { show(current - 1); });
-    lightbox.querySelector('[data-lightbox-next]').addEventListener('click', function () { show(current + 1); });
+    lightbox.querySelector('[data-lightbox-prev]').addEventListener('click', function () { go(-1); });
+    lightbox.querySelector('[data-lightbox-next]').addEventListener('click', function () { go(1); });
     lightbox.querySelector('[data-lightbox-close]').addEventListener('click', closeLightbox);
 
     lightbox.addEventListener('cancel', function (e) {
@@ -502,8 +551,8 @@
 
     lightbox.addEventListener('keydown', function (e) {
       if (lbClosing) return;
-      if (e.key === 'ArrowLeft') show(current - 1);
-      else if (e.key === 'ArrowRight') show(current + 1);
+      if (e.key === 'ArrowLeft') go(-1);
+      else if (e.key === 'ArrowRight') go(1);
     });
 
     lightbox.addEventListener('click', function (e) {
@@ -530,7 +579,7 @@
     lightbox.addEventListener('touchend', function (e) {
       if (touchX === null) return;
       var dx = e.changedTouches[0].clientX - touchX;
-      if (Math.abs(dx) > 50) show(dx < 0 ? current + 1 : current - 1);
+      if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1);
       touchX = null;
     });
   }
@@ -835,7 +884,6 @@
 
   if (productsData && productDialog && typeof productDialog.showModal === 'function') {
     var products = JSON.parse(productsData.textContent);
-    var ALLEGRO = 'https://allegro.pl/uzytkownik/Agro-Centrum2015';
     var hoverQuery = window.matchMedia('(hover: hover) and (pointer: fine)');
     var productChips = Array.prototype.slice.call(document.querySelectorAll('[data-product]'));
     var pdPanel = productDialog.querySelector('.product__panel');
@@ -847,7 +895,6 @@
     var pdVariants = productDialog.querySelector('[data-product-variants]');
     var pdSizesRow = productDialog.querySelector('[data-product-sizes-row]');
     var pdSizes = productDialog.querySelector('[data-product-sizes]');
-    var pdAllegro = productDialog.querySelector('[data-product-allegro]');
     var pdNav = productDialog.querySelector('.product__nav');
     var pdCount = productDialog.querySelector('[data-product-count]');
     var pdList = [];
@@ -877,14 +924,16 @@
       return item.sizes || p.sizes || '';
     }
 
-    function renderVariant(i) {
+    function renderVariant(i, animate) {
       var p = products[pdChip.dataset.product];
       var item = p.items[i];
       setImage(pdImg, item);
       pdImg.alt = p.name + (item.label ? ', ' + item.label : '');
-      pdImg.classList.remove('is-in');
-      void pdImg.offsetWidth;
-      pdImg.classList.add('is-in');
+      if (animate) {
+        pdImg.classList.remove('is-in');
+        void pdImg.offsetWidth;
+        pdImg.classList.add('is-in');
+      }
 
       var sizes = sizesOf(p, item);
       pdSizes.textContent = sizes;
@@ -902,7 +951,6 @@
       pdBrand.hidden = !p.brand;
       pdName.textContent = p.name;
       pdDesc.textContent = p.desc;
-      pdAllegro.href = ALLEGRO + '?string=' + encodeURIComponent(p.q);
 
       pdVariants.innerHTML = '';
       if (p.items.length > 1) {
@@ -916,7 +964,7 @@
           thumb.alt = '';
           btn.appendChild(thumb);
           btn.appendChild(document.createTextNode(item.label));
-          btn.addEventListener('click', function () { renderVariant(i); });
+          btn.addEventListener('click', function () { renderVariant(i, true); });
           li.appendChild(btn);
           pdVariants.appendChild(li);
         });
@@ -933,12 +981,60 @@
       });
     }
 
-    function stepProduct(d) {
-      if (pdList.length < 2) return;
-      pdIndex = (pdIndex + d + pdList.length) % pdList.length;
+    // Zmiana produktu: zdjęcie i opis odjeżdżają w bok, nowe wjeżdżają z drugiej strony
+    var pdBody = productDialog.querySelector('.product__body');
+    var pdSlideOut = null;
+    var pdSlideTarget = 0;
+
+    function applyProduct(index) {
+      pdIndex = (index + pdList.length) % pdList.length;
       pdChip = pdList[pdIndex];
       pdPanel.scrollTop = 0;
       renderProduct();
+    }
+
+    function finishProductSlide() {
+      if (!pdSlideOut) return;
+      pdSlideOut.onfinish = null;
+      pdSlideOut = null;
+      [pdImg, pdBody].forEach(function (el) {
+        el.getAnimations().forEach(function (a) { a.cancel(); });
+      });
+      applyProduct(pdSlideTarget);
+    }
+
+    function stepProduct(d) {
+      if (pdList.length < 2 || pdClosing) return;
+      finishProductSlide();
+      var target = pdIndex + d;
+      if (reduceMotion) {
+        applyProduct(target);
+        return;
+      }
+
+      var dir = d > 0 ? 1 : -1;
+      var outFrames = [
+        { transform: 'translateX(0)', opacity: 1 },
+        { transform: 'translateX(' + (-dir * 32) + 'px)', opacity: 0 }
+      ];
+      var inFrames = [
+        { transform: 'translateX(' + (dir * 32) + 'px)', opacity: 0 },
+        { transform: 'translateX(0)', opacity: 1 }
+      ];
+      pdImg.classList.remove('is-in');
+      pdSlideTarget = target;
+      pdBody.animate(outFrames, { duration: 160, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' });
+      pdSlideOut = pdImg.animate(outFrames, { duration: 160, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' });
+
+      pdSlideOut.onfinish = function () {
+        pdSlideOut = null;
+        [pdImg, pdBody].forEach(function (el) {
+          el.getAnimations().forEach(function (a) { a.cancel(); });
+        });
+        applyProduct(target);
+        pdImg.animate(inFrames, { duration: 340, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' });
+        pdBody.animate(inFrames, { duration: 340, delay: 40, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)', fill: 'backwards' });
+      };
     }
 
     function openProduct(chip) {
@@ -961,6 +1057,7 @@
 
     function closeProduct() {
       if (!productDialog.open || pdClosing) return;
+      finishProductSlide();
       pdClosing = true;
       productDialog.classList.remove('is-open');
       pdCloseTimer = setTimeout(function () {
