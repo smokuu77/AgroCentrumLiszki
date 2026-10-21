@@ -362,10 +362,27 @@
       }
     });
 
+    // Plakat filmu (120 KB) pobieramy dopiero, gdy film zbliża się do ekranu
+    function loadPoster() {
+      if (!promoVideo.dataset.poster) return;
+      promoVideo.poster = promoVideo.dataset.poster;
+      delete promoVideo.dataset.poster;
+    }
+
+    if (!('IntersectionObserver' in window)) loadPoster();
+
     if ('IntersectionObserver' in window) {
+      var posterObserver = new IntersectionObserver(function (entries) {
+        if (!entries[0].isIntersecting) return;
+        loadPoster();
+        posterObserver.disconnect();
+      }, { rootMargin: '800px 0px' });
+      posterObserver.observe(promoVideo);
+
       new IntersectionObserver(function (entries) {
         entries.forEach(function (entry) {
           if (entry.isIntersecting) {
+            loadPoster();
             if (!userPaused) playPromo();
           } else if (!promoVideo.paused) {
             promoVideo.pause();

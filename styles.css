@@ -410,6 +410,7 @@ p {
 .nav__link {
   position: relative;
   display: inline-flex;
+  white-space: nowrap;
   align-items: center;
   min-height: 2.75rem;
   padding: 0.5rem 0.9rem;
@@ -498,10 +499,6 @@ p {
     flex-wrap: wrap;
     padding-block: 0.5rem;
   }
-}
-
-.nav__link {
-  white-space: nowrap;
 }
 
 @media (min-width: 56rem) and (max-width: 74.9375rem) {
@@ -1944,6 +1941,7 @@ p {
 }
 
 .tab {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.75rem;
@@ -2021,10 +2019,6 @@ p {
       animation-delay: calc(0.24s + min(var(--i, 0), 24) * 0.018s);
     }
   }
-}
-
-.tab {
-  position: relative;
 }
 
 .tab__outline {
